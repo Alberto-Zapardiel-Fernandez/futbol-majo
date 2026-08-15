@@ -1,5 +1,6 @@
 package com.futbol.majo.entity;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
@@ -34,12 +35,20 @@ public class MatchEntity {
   /**
    * Estado del partido (ej. SCHEDULED, TIMED, FINISHED).
    */
+  @Column(name = "status", nullable = false)
   private String status;
 
   /**
    * Fecha y hora programada para el encuentro en formato UTC.
    */
+  @Column(name = "utc_date")
   private OffsetDateTime utcDate;
+
+  /**
+   * Día del partido
+   */
+  @Column(name = "match_day")
+  private Integer matchDay;
 
   /**
    * Equipo que disputa el partido en condición de local.

@@ -2,51 +2,55 @@ package com.futbol.majo.controller;
 
 import com.futbol.majo.dto.MatchDto;
 import com.futbol.majo.service.FootballDataService;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 
 /**
- * Controlador REST para la gestión y consulta de los datos futbolísticos de LaLiga.
+ * Controlador REST para la gestión de partidos y datos de fútbol.
  */
 @RestController
-@RequestMapping("/api/football")
+@RequestMapping("/api/football/laliga")
 public class FootballController {
 
   private final FootballDataService footballDataService;
 
-  /**
-   * Constructor para la inyección del servicio de datos de fútbol.
-   *
-   * @param footballDataService Servicio de negocio de datos deportivos.
-   */
   public FootballController(FootballDataService footballDataService) {
     this.footballDataService = footballDataService;
   }
 
   /**
-   * Sincroniza los partidos desde la API externa hacia la base de datos local.
-   *
-   * @return {@link ResponseEntity} con la lista de partidos sincronizados.
+   * Sincroniza los partidos desde la API externa.
    */
-  @PostMapping("/laliga/sync")
+  @PostMapping("/sync")
   public ResponseEntity<List<MatchDto>> syncMatches() {
-    List<MatchDto> syncedMatches = footballDataService.syncAndSaveLaLigaMatches();
-    return ResponseEntity.ok(syncedMatches);
+    List<MatchDto> matches = footballDataService.syncAndSaveLaLigaMatches();
+    return ResponseEntity.ok(matches);
   }
 
   /**
-   * Obtiene la lista de partidos guardados previamente en la base de datos.
-   *
-   * @return {@link ResponseEntity} con la lista de partidos de la base de datos.
+   * Obtiene partidos almacenados en BD con filtros opcionales por jornada, estado, equipo o rango de fechas.
+   * Soporta tanto ?matchDay=1 como ?matchday=1 para mayor tolerancia en peticiones HTTP.
    */
-  @GetMapping("/laliga/matches")
-  public ResponseEntity<List<MatchDto>> getStoredMatches() {
-    List<MatchDto> matches = footballDataService.getStoredMatches();
+  @GetMapping("/matches")
+  public ResponseEntity<List<MatchDto>> getMatches(
+      @RequestParam(name = "matchDay", required = false) Integer matchDay,
+      @RequestParam(name = "matchday", required = false) Integer matchdayAlias,
+      @RequestParam(name = "status", required = false) String status,
+      @RequestParam(name = "teamId", required = false) Long teamId,
+      @RequestParam(name = "from", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
+      @RequestParam(name = "to", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to) {
+
+    Integer effectiveMatchDay = matchDay != null ? matchDay : matchdayAlias;
+
+    List<MatchDto> matches = footballDataService.getStoredMatchesFiltered(effectiveMatchDay, status, teamId, from, to);
     return ResponseEntity.ok(matches);
   }
 }

@@ -62,6 +62,7 @@ public class MatchMapper {
         .id(dto.id())
         .status(dto.status())
         .utcDate(dto.utcDate())
+        .matchDay(dto.matchDay())
         .homeTeam(toTeamEntity(dto.homeTeam()))
         .awayTeam(toTeamEntity(dto.awayTeam()))
         .build();
@@ -81,6 +82,7 @@ public class MatchMapper {
         entity.getId(),
         entity.getStatus(),
         entity.getUtcDate(),
+        entity.getMatchDay(),
         toTeamDto(entity.getHomeTeam()),
         toTeamDto(entity.getAwayTeam())
     );

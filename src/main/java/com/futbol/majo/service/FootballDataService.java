@@ -3,14 +3,18 @@ package com.futbol.majo.service;
 import com.futbol.majo.dto.MatchDto;
 import com.futbol.majo.dto.MatchesResponseDto;
 import com.futbol.majo.dto.TeamDto;
+import com.futbol.majo.entity.MatchEntity;
 import com.futbol.majo.mapper.MatchMapper;
 import com.futbol.majo.repository.MatchRepository;
+import com.futbol.majo.repository.specification.MatchSpecification;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClient;
 
 import java.sql.PreparedStatement;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -18,7 +22,7 @@ import java.util.stream.Stream;
 
 /**
  * Servicio encargado de la orquestación de datos de partidos de fútbol,
- * consumo de la API externa e integración masiva mediante JDBC Batch en la base de datos.
+ * consumo de la API externa e integración con la base de datos.
  */
 @Service
 public class FootballDataService {
@@ -28,14 +32,6 @@ public class FootballDataService {
   private final MatchMapper matchMapper;
   private final JdbcTemplate jdbcTemplate;
 
-  /**
-   * Constructor para la inyección de dependencias.
-   *
-   * @param footballRestClient Cliente HTTP configurado para la API externa.
-   * @param matchRepository Repositorio JPA para la consulta de partidos.
-   * @param matchMapper Componente mapeador de entidades y DTOs.
-   * @param jdbcTemplate Cliente JDBC de Spring para ejecución masiva en lote.
-   */
   public FootballDataService(RestClient footballRestClient,
                              MatchRepository matchRepository,
                              MatchMapper matchMapper,
@@ -47,11 +43,7 @@ public class FootballDataService {
   }
 
   /**
-   * Sincroniza los partidos desde la API externa guardándolos en la base de datos
-   * mediante sentencias PostgreSQL UPSERT en lote (Batch JDBC) para ejecutar la operación
-   * en un único viaje de red.
-   *
-   * @return Lista de DTOs de los partidos recibidos y guardados.
+   * Sincroniza los partidos mediante inserción/actualización en lote (UPSERT JDBC).
    */
   @Transactional
   public List<MatchDto> syncAndSaveLaLigaMatches() {
@@ -66,7 +58,7 @@ public class FootballDataService {
 
     List<MatchDto> matches = response.matches();
 
-    // 1. Extraer y deduplicar equipos recibidos
+    // 1. Deduplicar e insertar equipos
     List<TeamDto> uniqueTeams = matches.stream()
         .flatMap(m -> Stream.of(m.homeTeam(), m.awayTeam()))
         .filter(t -> t != null && t.id() != null)
@@ -79,7 +71,6 @@ public class FootballDataService {
         .stream()
         .toList();
 
-    // 2. Insertar o actualizar equipos en lote (UPSERT masivo)
     String teamUpsertSql = """
                 INSERT INTO teams (id, name, short_name, crest)
                 VALUES (?, ?, ?, ?)
@@ -97,13 +88,14 @@ public class FootballDataService {
           ps.setString(4, team.crest());
         });
 
-    // 3. Insertar o actualizar partidos en lote (UPSERT masivo)
+    // 2. Insertar partidos incluyendo matchday
     String matchUpsertSql = """
-                INSERT INTO matches (id, status, utc_date, home_team_id, away_team_id)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO matches (id, status, utc_date, match_day, home_team_id, away_team_id)
+                VALUES (?, ?, ?, ?, ?, ?)
                 ON CONFLICT (id) DO UPDATE SET
                     status = EXCLUDED.status,
                     utc_date = EXCLUDED.utc_date,
+                    match_day = EXCLUDED.match_day,
                     home_team_id = EXCLUDED.home_team_id,
                     away_team_id = EXCLUDED.away_team_id
                 """;
@@ -113,21 +105,30 @@ public class FootballDataService {
           ps.setLong(1, match.id());
           ps.setString(2, match.status());
           ps.setObject(3, match.utcDate());
-          ps.setObject(4, match.homeTeam() != null ? match.homeTeam().id() : null);
-          ps.setObject(5, match.awayTeam() != null ? match.awayTeam().id() : null);
+          ps.setObject(4, match.matchDay());
+          ps.setObject(5, match.homeTeam() != null ? match.homeTeam().id() : null);
+          ps.setObject(6, match.awayTeam() != null ? match.awayTeam().id() : null);
         });
 
     return matches;
   }
 
   /**
-   * Recupera todos los partidos almacenados en la base de datos.
-   *
-   * @return Lista de DTOs de los partidos persistidos.
+   * Consulta dinámica de partidos aplicando filtros opcionales.
    */
   @Transactional(readOnly = true)
-  public List<MatchDto> getStoredMatches() {
-    return matchRepository.findAll().stream()
+  public List<MatchDto> getStoredMatchesFiltered(Integer matchDay,
+                                                 String status,
+                                                 Long teamId,
+                                                 OffsetDateTime from,
+                                                 OffsetDateTime to) {
+    Specification<MatchEntity> spec = Specification
+        .where(MatchSpecification.hasMatchday(matchDay))
+        .and(MatchSpecification.hasStatus(status))
+        .and(MatchSpecification.hasTeamId(teamId))
+        .and(MatchSpecification.betweenDates(from, to));
+
+    return matchRepository.findAll(spec).stream()
         .map(matchMapper::toMatchDto)
         .toList();
   }
