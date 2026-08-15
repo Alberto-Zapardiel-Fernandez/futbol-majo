@@ -23,6 +23,17 @@ public class MatchSpecification {
   }
 
   /**
+   * Filtra por competición.
+   *
+   * @param competition La competición (código) a filtrar.
+   * @return La especificación JPA correspondiente.
+   */
+  public static Specification<MatchEntity> hasCompetition(String competition) {
+    return (root, query, cb) ->
+        (competition == null || competition.isBlank()) ? null : cb.equal(cb.upper(root.get("competitionCode")), competition.trim().toUpperCase());
+  }
+
+  /**
    * Filtra partidos por estado (FINISHED, SCHEDULED, IN_PLAY, etc.).
    */
   public static Specification<MatchEntity> hasStatus(String status) {

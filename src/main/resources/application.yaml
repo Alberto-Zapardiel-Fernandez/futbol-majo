@@ -31,3 +31,10 @@ football:
   api:
     key: ${FOOTBALL_API_KEY:}
     url: https://api.football-data.org/v4
+
+logging:
+  level:
+    root: INFO
+    com.futbol.majo: DEBUG
+    org.springframework.web: DEBUG
+    org.springframework.web.servlet.mvc.method.annotation: DEBUG

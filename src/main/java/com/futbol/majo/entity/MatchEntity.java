@@ -33,6 +33,12 @@ public class MatchEntity {
   private Long id;
 
   /**
+   * A que liga pertenece
+   */
+  @Column(name = "competition_code")
+  private String competitionCode;
+
+  /**
    * Estado del partido (ej. SCHEDULED, TIMED, FINISHED).
    */
   @Column(name = "status", nullable = false)

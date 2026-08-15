@@ -31,8 +31,8 @@ public class FootballController {
    * Sincroniza los partidos desde la API externa.
    */
   @PostMapping("/sync")
-  public ResponseEntity<List<MatchDTO>> syncMatches() {
-    List<MatchDTO> matches = footballDataService.syncAndSaveLaLigaMatches();
+  public ResponseEntity<List<MatchDTO>> syncMatches(@RequestParam(required = false) String league) {
+    List<MatchDTO> matches = footballDataService.syncAndSaveLaLigaMatches(league);
     return ResponseEntity.ok(matches);
   }
 
@@ -42,6 +42,7 @@ public class FootballController {
    */
   @GetMapping("/matches")
   public ResponseEntity<Page<MatchDTO>> getMatches(
+      @RequestParam(required = false) String competition,
       @RequestParam(required = false) Integer matchDay,
       @RequestParam(required = false) String status,
       @RequestParam(required = false) Long teamId,
@@ -50,7 +51,7 @@ public class FootballController {
       @PageableDefault(size = 20, sort = "utcDate") Pageable pageable) {
 
     Page<MatchDTO> matches = footballDataService.getStoredMatchesFiltered(
-        matchDay, status, teamId, from, to, pageable
+        competition, matchDay, status, teamId, from, to, pageable
     );
 
     return ResponseEntity.ok(matches);

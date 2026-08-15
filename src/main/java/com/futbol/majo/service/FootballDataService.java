@@ -45,12 +45,14 @@ public class FootballDataService {
   }
 
   /**
-   * Sincroniza los partidos mediante inserción/actualización en lote (UPSERT JDBC).
+   * Sincroniza los partidos mediante inserción/actualización en lote (UPSERT JDBC) para una liga específica.
    */
   @Transactional
-  public List<MatchDTO> syncAndSaveLaLigaMatches() {
+  public List<MatchDTO> syncAndSaveLaLigaMatches(String league) {
+    String competitionCode = league != null ? league.trim().toUpperCase() : "PD";
+
     MatchesResponseDTO response = footballRestClient.get()
-        .uri("/competitions/PD/matches")
+        .uri("/competitions/" + competitionCode + "/matches")
         .retrieve()
         .body(MatchesResponseDTO.class);
 
@@ -74,13 +76,13 @@ public class FootballDataService {
         .toList();
 
     String teamUpsertSql = """
-                INSERT INTO teams (id, name, short_name, crest)
-                VALUES (?, ?, ?, ?)
-                ON CONFLICT (id) DO UPDATE SET
-                    name = EXCLUDED.name,
-                    short_name = EXCLUDED.short_name,
-                    crest = EXCLUDED.crest
-                """;
+        INSERT INTO teams (id, name, short_name, crest)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT (id) DO UPDATE SET
+            name = EXCLUDED.name,
+            short_name = EXCLUDED.short_name,
+            crest = EXCLUDED.crest
+        """;
 
     jdbcTemplate.batchUpdate(teamUpsertSql, uniqueTeams, uniqueTeams.size(),
         (PreparedStatement ps, TeamDTO team) -> {
@@ -90,48 +92,51 @@ public class FootballDataService {
           ps.setString(4, team.crest());
         });
 
-    // 2. Insertar partidos incluyendo matchday
+    // 2. Insertar partidos incluyendo competition_code y matchday
     String matchUpsertSql = """
-                INSERT INTO matches (id, status, utc_date, match_day, home_team_id, away_team_id)
-                VALUES (?, ?, ?, ?, ?, ?)
-                ON CONFLICT (id) DO UPDATE SET
-                    status = EXCLUDED.status,
-                    utc_date = EXCLUDED.utc_date,
-                    match_day = EXCLUDED.match_day,
-                    home_team_id = EXCLUDED.home_team_id,
-                    away_team_id = EXCLUDED.away_team_id
-                """;
+        INSERT INTO matches (id, competition_code, status, utc_date, match_day, home_team_id, away_team_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT (id) DO UPDATE SET
+            competition_code = EXCLUDED.competition_code,
+            status = EXCLUDED.status,
+            utc_date = EXCLUDED.utc_date,
+            match_day = EXCLUDED.match_day,
+            home_team_id = EXCLUDED.home_team_id,
+            away_team_id = EXCLUDED.away_team_id
+        """;
 
     jdbcTemplate.batchUpdate(matchUpsertSql, matches, matches.size(),
         (PreparedStatement ps, MatchDTO match) -> {
           ps.setLong(1, match.id());
-          ps.setString(2, match.status());
-          ps.setObject(3, match.utcDate());
-          ps.setObject(4, match.matchDay());
-          ps.setObject(5, match.homeTeam() != null ? match.homeTeam().id() : null);
-          ps.setObject(6, match.awayTeam() != null ? match.awayTeam().id() : null);
+          ps.setString(2, competitionCode);
+          ps.setString(3, match.status());
+          ps.setObject(4, match.utcDate());
+          ps.setObject(5, match.matchDay());
+          ps.setObject(6, match.homeTeam() != null ? match.homeTeam().id() : null);
+          ps.setObject(7, match.awayTeam() != null ? match.awayTeam().id() : null);
         });
 
     return matches;
   }
 
   /**
-   * Consulta dinámica de partidos aplicando filtros opcionales.
+   * Consulta dinámica de partidos aplicando filtros opcionales (incluyendo competición y paginación).
    */
   @Transactional(readOnly = true)
-  public Page<MatchDTO> getStoredMatchesFiltered(Integer matchDay,
+  public Page<MatchDTO> getStoredMatchesFiltered(String competition,
+                                                 Integer matchDay,
                                                  String status,
                                                  Long teamId,
                                                  OffsetDateTime from,
                                                  OffsetDateTime to,
-                                                 Pageable pageable) { // <--- Añadimos Pageable
+                                                 Pageable pageable) {
     Specification<MatchEntity> spec = Specification
-        .where(MatchSpecification.hasMatchday(matchDay))
+        .where(MatchSpecification.hasCompetition(competition))
+        .and(MatchSpecification.hasMatchday(matchDay))
         .and(MatchSpecification.hasStatus(status))
         .and(MatchSpecification.hasTeamId(teamId))
         .and(MatchSpecification.betweenDates(from, to));
 
-    // Le pasamos la paginación al repositorio y mapeamos a DTO
     return matchRepository.findAll(spec, pageable)
         .map(matchMapper::toMatchDto);
   }

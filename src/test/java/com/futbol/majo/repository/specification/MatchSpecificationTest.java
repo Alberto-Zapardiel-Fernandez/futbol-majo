@@ -29,21 +29,21 @@ class MatchSpecificationTest {
 
   private TeamEntity realMadrid;
   private TeamEntity barcelona;
+  private TeamEntity atletico;
 
   @BeforeEach
   void setUp() {
-    // Equipos con ID explícito (IDs externos de la API)
     realMadrid = new TeamEntity(1L, "Real Madrid CF", "Real Madrid", "crest_rm.png");
     barcelona = new TeamEntity(2L, "FC Barcelona", "Barça", "crest_bar.png");
-    TeamEntity atletico = new TeamEntity(3L, "Atlético de Madrid", "Atleti", "crest_atm.png");
+    atletico = new TeamEntity(3L, "Atlético de Madrid", "Atleti", "crest_atm.png");
 
     entityManager.persist(realMadrid);
     entityManager.persist(barcelona);
     entityManager.persist(atletico);
 
-    // Partidos con ID explícito (MatchEntity tampoco usa @GeneratedValue)
     MatchEntity match1 = new MatchEntity();
     match1.setId(101L);
+    match1.setCompetitionCode("PD");
     match1.setMatchDay(1);
     match1.setStatus("FINISHED");
     match1.setUtcDate(OffsetDateTime.parse("2026-08-15T18:00:00Z"));
@@ -52,6 +52,7 @@ class MatchSpecificationTest {
 
     MatchEntity match2 = new MatchEntity();
     match2.setId(102L);
+    match2.setCompetitionCode("PD");
     match2.setMatchDay(2);
     match2.setStatus("SCHEDULED");
     match2.setUtcDate(OffsetDateTime.parse("2026-08-22T20:00:00Z"));
@@ -86,6 +87,12 @@ class MatchSpecificationTest {
   @Test
   @DisplayName("Debe encontrar partidos donde un equipo sea local O visitante por su teamId")
   void testHasTeamId() {
+    // Atlético juega como local en match1 y visitante en match2 -> Debe devolver 1 partido
+    Specification<MatchEntity> specAtleti = MatchSpecification.hasTeamId(atletico.getId());
+    List<MatchEntity> resultsAtleti = matchRepository.findAll(specAtleti);
+
+    assertThat(resultsAtleti).hasSize(1);
+
     // Real Madrid juega como local en match1 y visitante en match2 -> Debe devolver 2 partidos
     Specification<MatchEntity> specRM = MatchSpecification.hasTeamId(realMadrid.getId());
     List<MatchEntity> resultsRM = matchRepository.findAll(specRM);
