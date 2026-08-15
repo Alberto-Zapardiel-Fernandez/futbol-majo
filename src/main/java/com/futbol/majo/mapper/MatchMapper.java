@@ -1,7 +1,7 @@
 package com.futbol.majo.mapper;
 
-import com.futbol.majo.dto.MatchDto;
-import com.futbol.majo.dto.TeamDto;
+import com.futbol.majo.dto.MatchDTO;
+import com.futbol.majo.dto.TeamDTO;
 import com.futbol.majo.entity.MatchEntity;
 import com.futbol.majo.entity.TeamEntity;
 import org.springframework.stereotype.Component;
@@ -13,12 +13,12 @@ import org.springframework.stereotype.Component;
 public class MatchMapper {
 
   /**
-   * Convierte un {@link TeamDto} en una entidad {@link TeamEntity}.
+   * Convierte un {@link TeamDTO} en una entidad {@link TeamEntity}.
    *
    * @param dto DTO del equipo recibido de la API o capa externa.
    * @return Instancia mapeada de {@link TeamEntity}.
    */
-  public TeamEntity toTeamEntity(TeamDto dto) {
+  public TeamEntity toTeamEntity(TeamDTO dto) {
     if (dto == null) {
       return null;
     }
@@ -31,16 +31,16 @@ public class MatchMapper {
   }
 
   /**
-   * Convierte una entidad {@link TeamEntity} a su DTO correspondiente {@link TeamDto}.
+   * Convierte una entidad {@link TeamEntity} a su DTO correspondiente {@link TeamDTO}.
    *
    * @param entity Entidad de persistencia del equipo.
-   * @return Instancia mapeada de {@link TeamDto}.
+   * @return Instancia mapeada de {@link TeamDTO}.
    */
-  public TeamDto toTeamDto(TeamEntity entity) {
+  public TeamDTO toTeamDto(TeamEntity entity) {
     if (entity == null) {
       return null;
     }
-    return new TeamDto(
+    return new TeamDTO(
         entity.getId(),
         entity.getName(),
         entity.getShortName(),
@@ -49,12 +49,12 @@ public class MatchMapper {
   }
 
   /**
-   * Convierte un {@link MatchDto} en una entidad {@link MatchEntity}.
+   * Convierte un {@link MatchDTO} en una entidad {@link MatchEntity}.
    *
    * @param dto DTO del partido.
    * @return Instancia mapeada de {@link MatchEntity}.
    */
-  public MatchEntity toMatchEntity(MatchDto dto) {
+  public MatchEntity toMatchEntity(MatchDTO dto) {
     if (dto == null) {
       return null;
     }
@@ -69,16 +69,16 @@ public class MatchMapper {
   }
 
   /**
-   * Convierte una entidad {@link MatchEntity} a su DTO correspondiente {@link MatchDto}.
+   * Convierte una entidad {@link MatchEntity} a su DTO correspondiente {@link MatchDTO}.
    *
    * @param entity Entidad de persistencia del partido.
-   * @return Instancia mapeada de {@link MatchDto}.
+   * @return Instancia mapeada de {@link MatchDTO}.
    */
-  public MatchDto toMatchDto(MatchEntity entity) {
+  public MatchDTO toMatchDto(MatchEntity entity) {
     if (entity == null) {
       return null;
     }
-    return new MatchDto(
+    return new MatchDTO(
         entity.getId(),
         entity.getStatus(),
         entity.getUtcDate(),

@@ -1,6 +1,6 @@
 package com.futbol.majo.dto;
 
-public record TeamDto(
+public record TeamDTO(
     Long id,
     String name,
     String shortName,

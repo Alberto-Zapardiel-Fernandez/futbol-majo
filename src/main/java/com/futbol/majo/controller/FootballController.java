@@ -1,7 +1,11 @@
 package com.futbol.majo.controller;
 
-import com.futbol.majo.dto.MatchDto;
+import com.futbol.majo.dto.MatchDTO;
 import com.futbol.majo.service.FootballDataService;
+import lombok.AllArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -17,21 +21,18 @@ import java.util.List;
  * Controlador REST para la gestión de partidos y datos de fútbol.
  */
 @RestController
+@AllArgsConstructor
 @RequestMapping("/api/football/laliga")
 public class FootballController {
 
   private final FootballDataService footballDataService;
 
-  public FootballController(FootballDataService footballDataService) {
-    this.footballDataService = footballDataService;
-  }
-
   /**
    * Sincroniza los partidos desde la API externa.
    */
   @PostMapping("/sync")
-  public ResponseEntity<List<MatchDto>> syncMatches() {
-    List<MatchDto> matches = footballDataService.syncAndSaveLaLigaMatches();
+  public ResponseEntity<List<MatchDTO>> syncMatches() {
+    List<MatchDTO> matches = footballDataService.syncAndSaveLaLigaMatches();
     return ResponseEntity.ok(matches);
   }
 
@@ -40,17 +41,18 @@ public class FootballController {
    * Soporta tanto ?matchDay=1 como ?matchday=1 para mayor tolerancia en peticiones HTTP.
    */
   @GetMapping("/matches")
-  public ResponseEntity<List<MatchDto>> getMatches(
-      @RequestParam(name = "matchDay", required = false) Integer matchDay,
-      @RequestParam(name = "matchday", required = false) Integer matchdayAlias,
-      @RequestParam(name = "status", required = false) String status,
-      @RequestParam(name = "teamId", required = false) Long teamId,
-      @RequestParam(name = "from", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
-      @RequestParam(name = "to", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to) {
+  public ResponseEntity<Page<MatchDTO>> getMatches(
+      @RequestParam(required = false) Integer matchDay,
+      @RequestParam(required = false) String status,
+      @RequestParam(required = false) Long teamId,
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to,
+      @PageableDefault(size = 20, sort = "utcDate") Pageable pageable) {
 
-    Integer effectiveMatchDay = matchDay != null ? matchDay : matchdayAlias;
+    Page<MatchDTO> matches = footballDataService.getStoredMatchesFiltered(
+        matchDay, status, teamId, from, to, pageable
+    );
 
-    List<MatchDto> matches = footballDataService.getStoredMatchesFiltered(effectiveMatchDay, status, teamId, from, to);
     return ResponseEntity.ok(matches);
   }
 }

@@ -1,12 +1,14 @@
 package com.futbol.majo.service;
 
-import com.futbol.majo.dto.MatchDto;
-import com.futbol.majo.dto.MatchesResponseDto;
-import com.futbol.majo.dto.TeamDto;
+import com.futbol.majo.dto.MatchDTO;
+import com.futbol.majo.dto.MatchesResponseDTO;
+import com.futbol.majo.dto.TeamDTO;
 import com.futbol.majo.entity.MatchEntity;
 import com.futbol.majo.mapper.MatchMapper;
 import com.futbol.majo.repository.MatchRepository;
 import com.futbol.majo.repository.specification.MatchSpecification;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -46,24 +48,24 @@ public class FootballDataService {
    * Sincroniza los partidos mediante inserción/actualización en lote (UPSERT JDBC).
    */
   @Transactional
-  public List<MatchDto> syncAndSaveLaLigaMatches() {
-    MatchesResponseDto response = footballRestClient.get()
+  public List<MatchDTO> syncAndSaveLaLigaMatches() {
+    MatchesResponseDTO response = footballRestClient.get()
         .uri("/competitions/PD/matches")
         .retrieve()
-        .body(MatchesResponseDto.class);
+        .body(MatchesResponseDTO.class);
 
     if (response == null || response.matches() == null || response.matches().isEmpty()) {
       return List.of();
     }
 
-    List<MatchDto> matches = response.matches();
+    List<MatchDTO> matches = response.matches();
 
     // 1. Deduplicar e insertar equipos
-    List<TeamDto> uniqueTeams = matches.stream()
+    List<TeamDTO> uniqueTeams = matches.stream()
         .flatMap(m -> Stream.of(m.homeTeam(), m.awayTeam()))
         .filter(t -> t != null && t.id() != null)
         .collect(Collectors.toMap(
-            TeamDto::id,
+            TeamDTO::id,
             Function.identity(),
             (existing, replacement) -> existing
         ))
@@ -81,7 +83,7 @@ public class FootballDataService {
                 """;
 
     jdbcTemplate.batchUpdate(teamUpsertSql, uniqueTeams, uniqueTeams.size(),
-        (PreparedStatement ps, TeamDto team) -> {
+        (PreparedStatement ps, TeamDTO team) -> {
           ps.setLong(1, team.id());
           ps.setString(2, team.name());
           ps.setString(3, team.shortName());
@@ -101,7 +103,7 @@ public class FootballDataService {
                 """;
 
     jdbcTemplate.batchUpdate(matchUpsertSql, matches, matches.size(),
-        (PreparedStatement ps, MatchDto match) -> {
+        (PreparedStatement ps, MatchDTO match) -> {
           ps.setLong(1, match.id());
           ps.setString(2, match.status());
           ps.setObject(3, match.utcDate());
@@ -117,19 +119,20 @@ public class FootballDataService {
    * Consulta dinámica de partidos aplicando filtros opcionales.
    */
   @Transactional(readOnly = true)
-  public List<MatchDto> getStoredMatchesFiltered(Integer matchDay,
+  public Page<MatchDTO> getStoredMatchesFiltered(Integer matchDay,
                                                  String status,
                                                  Long teamId,
                                                  OffsetDateTime from,
-                                                 OffsetDateTime to) {
+                                                 OffsetDateTime to,
+                                                 Pageable pageable) { // <--- Añadimos Pageable
     Specification<MatchEntity> spec = Specification
         .where(MatchSpecification.hasMatchday(matchDay))
         .and(MatchSpecification.hasStatus(status))
         .and(MatchSpecification.hasTeamId(teamId))
         .and(MatchSpecification.betweenDates(from, to));
 
-    return matchRepository.findAll(spec).stream()
-        .map(matchMapper::toMatchDto)
-        .toList();
+    // Le pasamos la paginación al repositorio y mapeamos a DTO
+    return matchRepository.findAll(spec, pageable)
+        .map(matchMapper::toMatchDto);
   }
 }
