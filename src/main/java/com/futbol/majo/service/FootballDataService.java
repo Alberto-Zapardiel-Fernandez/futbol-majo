@@ -8,6 +8,8 @@ import com.futbol.majo.entity.MatchEntity;
 import com.futbol.majo.mapper.MatchMapper;
 import com.futbol.majo.repository.MatchRepository;
 import com.futbol.majo.repository.specification.MatchSpecification;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -24,8 +26,17 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * Servicio encargado de la orquestación de datos de partidos de fútbol,
- * consumo de la API externa e integración con la base de datos.
+ * Servicio principal que orquesta todos los datos de fútbol.
+ *
+ * <p>Responsabilidades:</p>
+ * <ul>
+ *   <li>Sincronizar partidos desde la API externa a nuestra BD (Supabase).</li>
+ *   <li>Consultar partidos de nuestra BD con filtros dinámicos.</li>
+ *   <li>Obtener la clasificación en tiempo real desde la API externa, con caché.</li>
+ * </ul>
+ *
+ * <p>La caché (Caffeine) se configura en {@code application.yaml} y se activa
+ * con {@code @EnableCaching} en {@link com.futbol.majo.MajoApplication}.</p>
  */
 @Service
 public class FootballDataService {
@@ -35,6 +46,14 @@ public class FootballDataService {
   private final MatchMapper matchMapper;
   private final JdbcTemplate jdbcTemplate;
 
+  /**
+   * Constructor con inyección de dependencias explícita (sin @Autowired, mejor práctica).
+   *
+   * @param footballRestClient Cliente HTTP configurado para la API de football-data.org.
+   * @param matchRepository    Repositorio JPA para la entidad {@link com.futbol.majo.entity.MatchEntity}.
+   * @param matchMapper        Conversor entre entidades JPA y DTOs.
+   * @param jdbcTemplate       Template JDBC para operaciones batch de alto rendimiento.
+   */
   public FootballDataService(RestClient footballRestClient,
                              MatchRepository matchRepository,
                              MatchMapper matchMapper,
@@ -45,9 +64,23 @@ public class FootballDataService {
     this.jdbcTemplate = jdbcTemplate;
   }
 
+  // =========================================================================
+  // SINCRONIZACIÓN (escribe en BD + invalida la caché de clasificación)
+  // =========================================================================
+
   /**
-   * Sincroniza los partidos mediante inserción/actualización en lote (UPSERT JDBC) para una liga específica.
+   * Sincroniza todos los partidos de una liga desde la API externa hacia nuestra BD.
+   *
+   * <p>Usa un Batch UPSERT con JDBC para máximo rendimiento:
+   * si el partido ya existe, lo actualiza; si no, lo inserta.
+   * Esta operación también invalida la caché de clasificación ({@code @CacheEvict})
+   * porque tras sincronizar, los standings pueden haber cambiado.</p>
+   *
+   * @param league Código de la competición (ej. "PD" para LaLiga, "BL1" para Bundesliga).
+   *               Si es {@code null}, se usa "PD" por defecto.
+   * @return Lista de {@link MatchDTO} sincronizados desde la API.
    */
+  @CacheEvict(value = "standings", allEntries = true)
   @Transactional
   public List<MatchDTO> syncAndSaveLaLigaMatches(String league) {
     String competitionCode = league != null ? league.trim().toUpperCase() : "PD";
@@ -63,7 +96,7 @@ public class FootballDataService {
 
     List<MatchDTO> matches = response.matches();
 
-    // 1. Deduplicar e insertar equipos
+    // 1. Deduplicar e insertar equipos en lote
     List<TeamDTO> uniqueTeams = matches.stream()
         .flatMap(m -> Stream.of(m.homeTeam(), m.awayTeam()))
         .filter(t -> t != null && t.id() != null)
@@ -77,13 +110,13 @@ public class FootballDataService {
         .toList();
 
     String teamUpsertSql = """
-        INSERT INTO teams (id, name, short_name, crest)
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT (id) DO UPDATE SET
-            name = EXCLUDED.name,
-            short_name = EXCLUDED.short_name,
-            crest = EXCLUDED.crest
-        """;
+            INSERT INTO teams (id, name, short_name, crest)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT (id) DO UPDATE SET
+                name = EXCLUDED.name,
+                short_name = EXCLUDED.short_name,
+                crest = EXCLUDED.crest
+            """;
 
     jdbcTemplate.batchUpdate(teamUpsertSql, uniqueTeams, uniqueTeams.size(),
         (PreparedStatement ps, TeamDTO team) -> {
@@ -93,18 +126,18 @@ public class FootballDataService {
           ps.setString(4, team.crest());
         });
 
-    // 2. Insertar partidos incluyendo competition_code y matchday
+    // 2. Insertar/actualizar partidos en lote incluyendo competition_code
     String matchUpsertSql = """
-        INSERT INTO matches (id, competition_code, status, utc_date, match_day, home_team_id, away_team_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT (id) DO UPDATE SET
-            competition_code = EXCLUDED.competition_code,
-            status = EXCLUDED.status,
-            utc_date = EXCLUDED.utc_date,
-            match_day = EXCLUDED.match_day,
-            home_team_id = EXCLUDED.home_team_id,
-            away_team_id = EXCLUDED.away_team_id
-        """;
+            INSERT INTO matches (id, competition_code, status, utc_date, match_day, home_team_id, away_team_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (id) DO UPDATE SET
+                competition_code = EXCLUDED.competition_code,
+                status           = EXCLUDED.status,
+                utc_date         = EXCLUDED.utc_date,
+                match_day        = EXCLUDED.match_day,
+                home_team_id     = EXCLUDED.home_team_id,
+                away_team_id     = EXCLUDED.away_team_id
+            """;
 
     jdbcTemplate.batchUpdate(matchUpsertSql, matches, matches.size(),
         (PreparedStatement ps, MatchDTO match) -> {
@@ -120,8 +153,25 @@ public class FootballDataService {
     return matches;
   }
 
+  // =========================================================================
+  // CONSULTA DE PARTIDOS (desde nuestra BD, sin caché — ya es rápido con JPA)
+  // =========================================================================
+
   /**
-   * Consulta dinámica de partidos aplicando filtros opcionales (incluyendo competición y paginación).
+   * Consulta dinámica de partidos con filtros opcionales y paginación.
+   *
+   * <p>Utiliza JPA Specifications para construir la query SQL de forma segura
+   * y programática. Al consultar nuestra propia BD (Supabase) no necesitamos
+   * caché aquí; la caché es para proteger la API externa.</p>
+   *
+   * @param competition Código de la competición (ej. "PD", "BL1"). Opcional.
+   * @param matchDay    Número de jornada. Opcional.
+   * @param status      Estado del partido (FINISHED, SCHEDULED, IN_PLAY...). Opcional.
+   * @param teamId      ID del equipo (busca como local O visitante). Opcional.
+   * @param from        Fecha de inicio del rango. Opcional.
+   * @param to          Fecha de fin del rango. Opcional.
+   * @param pageable    Configuración de paginación y ordenación de Spring Data.
+   * @return Página de {@link MatchDTO} que cumplen los filtros.
    */
   @Transactional(readOnly = true)
   public Page<MatchDTO> getStoredMatchesFiltered(String competition,
@@ -142,9 +192,30 @@ public class FootballDataService {
         .map(matchMapper::toMatchDto);
   }
 
+  // =========================================================================
+  // CLASIFICACIÓN (desde la API externa, CON caché de 60 minutos)
+  // =========================================================================
+
   /**
-   * Obtiene la clasificación en tiempo real desde la API externa (sin persistir en BD).
+   * Obtiene la clasificación actual de una competición desde la API externa.
+   *
+   * <p><b>Caché activa:</b> el resultado se almacena en la caché {@code "standings"}
+   * durante 60 minutos (configurado en {@code application.yaml}).
+   * La clave de caché es el código de competición normalizado a mayúsculas,
+   * así "pd", "PD" y "Pd" comparten la misma entrada en caché.</p>
+   *
+   * <p>Esto protege el límite de la API gratuita: aunque 1000 usuarios
+   * abran la clasificación a la vez, solo se lanza 1 llamada real a la API
+   * cada 60 minutos.</p>
+   *
+   * @param competitionCode Código de la competición (ej. "PD" para LaLiga).
+   *                        Si es {@code null} o vacío, se usa "PD" por defecto.
+   * @return {@link StandingsResponseDTO} con la tabla de clasificación completa.
    */
+  @Cacheable(
+      value = "standings",
+      key   = "#competitionCode != null ? #competitionCode.trim().toUpperCase() : 'PD'"
+  )
   public StandingsResponseDTO getStandings(String competitionCode) {
     String code = (competitionCode != null && !competitionCode.isBlank())
         ? competitionCode.trim().toUpperCase()
@@ -155,5 +226,4 @@ public class FootballDataService {
         .retrieve()
         .body(StandingsResponseDTO.class);
   }
-
 }
