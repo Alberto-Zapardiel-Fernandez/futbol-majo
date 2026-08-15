@@ -38,3 +38,13 @@ logging:
     com.futbol.majo: DEBUG
     org.springframework.web: DEBUG
     org.springframework.web.servlet.mvc.method.annotation: DEBUG
+
+# ✅ NUEVO DÍA 4: Configuración de Swagger UI / OpenAPI
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html         # URL donde se sirve la UI
+    operations-sorter: alpha       # Endpoints ordenados alfabéticamente
+    tags-sorter: alpha             # Tags ordenados alfabéticamente
+    try-it-out-enabled: true       # "Try it out" activo por defecto
+  api-docs:
+    path: /v3/api-docs             # URL del JSON con la especificación OpenAPI
