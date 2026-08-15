@@ -1,6 +1,7 @@
 package com.futbol.majo.controller;
 
 import com.futbol.majo.dto.MatchDTO;
+import com.futbol.majo.dto.StandingsResponseDTO;
 import com.futbol.majo.service.FootballDataService;
 import lombok.AllArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -56,4 +57,16 @@ public class FootballController {
 
     return ResponseEntity.ok(matches);
   }
+
+  /**
+   * Devuelve la clasificación actual de una competición.
+   * Ejemplo: GET /api/football/laliga/standings?competition=PD
+   */
+  @GetMapping("/standings")
+  public ResponseEntity<StandingsResponseDTO> getStandings(
+      @RequestParam(required = false, defaultValue = "PD") String competition) {
+
+    return ResponseEntity.ok(footballDataService.getStandings(competition.trim().toUpperCase()));
+  }
+
 }

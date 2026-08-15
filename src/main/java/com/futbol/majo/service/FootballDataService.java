@@ -2,6 +2,7 @@ package com.futbol.majo.service;
 
 import com.futbol.majo.dto.MatchDTO;
 import com.futbol.majo.dto.MatchesResponseDTO;
+import com.futbol.majo.dto.StandingsResponseDTO;
 import com.futbol.majo.dto.TeamDTO;
 import com.futbol.majo.entity.MatchEntity;
 import com.futbol.majo.mapper.MatchMapper;
@@ -140,4 +141,19 @@ public class FootballDataService {
     return matchRepository.findAll(spec, pageable)
         .map(matchMapper::toMatchDto);
   }
+
+  /**
+   * Obtiene la clasificación en tiempo real desde la API externa (sin persistir en BD).
+   */
+  public StandingsResponseDTO getStandings(String competitionCode) {
+    String code = (competitionCode != null && !competitionCode.isBlank())
+        ? competitionCode.trim().toUpperCase()
+        : "PD";
+
+    return footballRestClient.get()
+        .uri("/competitions/" + code + "/standings")
+        .retrieve()
+        .body(StandingsResponseDTO.class);
+  }
+
 }
