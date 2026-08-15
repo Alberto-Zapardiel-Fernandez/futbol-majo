@@ -15,7 +15,11 @@ import lombok.Setter;
 import java.time.OffsetDateTime;
 
 /**
- * Entidad JPA que representa un partido de fútbol y su relación con los equipos participantes.
+ * Entidad JPA que representa un partido de fútbol almacenado en Supabase.
+ *
+ * <p>Contiene los datos básicos del partido: equipos, fecha, estado, jornada
+ * y marcador final. Los goles ({@code homeScore}, {@code awayScore}) se
+ * rellenan al sincronizar y pueden ser null para partidos no disputados.</p>
  */
 @Entity
 @Table(name = "matches")
@@ -26,47 +30,47 @@ import java.time.OffsetDateTime;
 @Builder
 public class MatchEntity {
 
-  /**
-   * Identificador único del partido asignado por la API externa.
-   */
+  /** Identificador único del partido asignado por la API externa. */
   @Id
   private Long id;
 
-  /**
-   * A que liga pertenece
-   */
+  /** Código de la competición (ej. "PD" para LaLiga, "CL" para Champions). */
   @Column(name = "competition_code")
   private String competitionCode;
 
-  /**
-   * Estado del partido (ej. SCHEDULED, TIMED, FINISHED).
-   */
+  /** Estado actual: SCHEDULED, TIMED, IN_PLAY, PAUSED, FINISHED, POSTPONED... */
   @Column(name = "status", nullable = false)
   private String status;
 
-  /**
-   * Fecha y hora programada para el encuentro en formato UTC.
-   */
+  /** Fecha y hora del partido en UTC. */
   @Column(name = "utc_date")
   private OffsetDateTime utcDate;
 
-  /**
-   * Día del partido
-   */
+  /** Número de jornada dentro de la competición. */
   @Column(name = "match_day")
   private Integer matchDay;
 
-  /**
-   * Equipo que disputa el partido en condición de local.
-   */
+  /** Equipo local. */
   @ManyToOne
   @JoinColumn(name = "home_team_id")
   private TeamEntity homeTeam;
 
-  /**
-   * Equipo que disputa el partido en condición de visitante.
-   */
+  /** Equipo visitante. */
   @ManyToOne
   @JoinColumn(name = "away_team_id")
   private TeamEntity awayTeam;
+
+  /**
+   * Goles del equipo local al final del partido.
+   * Null si el partido no ha comenzado o no hay datos de goles.
+   */
+  @Column(name = "home_score")
+  private Integer homeScore;
+
+  /**
+   * Goles del equipo visitante al final del partido.
+   * Null si el partido no ha comenzado o no hay datos de goles.
+   */
+  @Column(name = "away_score")
+  private Integer awayScore;
 }
