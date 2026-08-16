@@ -173,4 +173,16 @@ public class FootballController {
 
     return ResponseEntity.ok(footballDataService.getStandings(competition));
   }
+
+  /**
+   * Endpoint de health check para Render y UptimeRobot.
+   * Render lo usa para saber si el contenedor arrancó correctamente.
+   * UptimeRobot lo llama cada 5 minutos para mantener la app despierta.
+   */
+  @GetMapping("/health")
+  @Operation(summary = "Health check", description = "Devuelve OK si el servidor está arrancado.")
+  public ResponseEntity<String> health() {
+    return ResponseEntity.ok("OK");
+  }
+
 }

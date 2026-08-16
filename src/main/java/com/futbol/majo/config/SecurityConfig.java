@@ -23,7 +23,8 @@ public class SecurityConfig {
    * Lista blanca de rutas de Swagger UI que deben ser accesibles sin autenticación.
    * Incluye la página HTML, los recursos estáticos de la UI y el JSON de la spec.
    */
-  private static final String[] SWAGGER_WHITELIST = {
+  private static final String[] PUBLIC_URLS = {
+      "/api/**",
       "/swagger-ui.html",
       "/swagger-ui/**",
       "/v3/api-docs/**",
@@ -43,17 +44,16 @@ public class SecurityConfig {
    *
    * @param http Constructor de la cadena de seguridad proporcionado por Spring.
    * @return La cadena de filtros de seguridad configurada.
-   * @throws Exception Si ocurre algún error durante la configuración.
    */
   @Bean
-  public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+  public SecurityFilterChain securityFilterChain(HttpSecurity http) {
     return http
         .csrf(AbstractHttpConfigurer::disable)
         .authorizeHttpRequests(auth -> auth
-            .requestMatchers("/api/**").permitAll()
-            .requestMatchers(SWAGGER_WHITELIST).permitAll()
+            .requestMatchers(PUBLIC_URLS).permitAll()
             .anyRequest().authenticated()
         )
         .build();
   }
+
 }
