@@ -185,4 +185,23 @@ public class FootballController {
     return ResponseEntity.ok("OK");
   }
 
+  /**
+   * Sincronización manual inmediata desde el panel admin.
+   * Solo accesible con la API key para evitar abusos.
+   */
+  @PostMapping("/admin/sync-now")
+  @Operation(summary = "Sync manual urgente", description = "Fuerza sync inmediato de una liga. Solo para admin.")
+  public ResponseEntity<String> syncNow(
+      @RequestParam String league,
+      @RequestParam String adminKey) {
+
+    String expectedKey = System.getenv("ADMIN_SYNC_KEY");
+    if (expectedKey == null || !expectedKey.equals(adminKey)) {
+      return ResponseEntity.status(403).body("No autorizado");
+    }
+
+    footballDataService.syncAndSaveLaLigaMatches(league.toUpperCase());
+    return ResponseEntity.ok("Sync completado para " + league.toUpperCase());
+  }
+
 }
