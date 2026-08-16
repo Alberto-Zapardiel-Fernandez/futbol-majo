@@ -65,7 +65,7 @@ public class SyncScheduler {
    * La ventana incluye 3 horas hacia el PASADO para capturar partidos que
    * ya empezaron pero siguen con status TIMED en BD (bug de las 19:00 → 19:15).
    */
-  @Scheduled(fixedDelay = 300_000)
+  @Scheduled(fixedDelay = 120_000)
   public void syncLiveAndUpcoming() {
     // ← CLAVE DEL FIX: minusHours(3) en lugar de "now"
     // Así capturamos partidos que empezaron hasta 3h antes pero no se actualizaron
