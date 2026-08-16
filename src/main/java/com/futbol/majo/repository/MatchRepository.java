@@ -10,45 +10,69 @@ import java.time.OffsetDateTime;
 import java.util.List;
 
 /**
- * Repositorio de Spring Data JPA para la gestión de persistencia de {@link MatchEntity}.
+ * Repositorio JPA para la gestión de partidos.
  *
- * <p>Spring genera automáticamente las implementaciones de todos los métodos
- * declarados aquí: los que siguen la convención de nombres (findBy..., countBy...)
- * y los que tienen una {@code @Query} JPQL explícita.</p>
+ * <p>Spring genera las implementaciones automáticamente:
+ * - Métodos con convención de nombres (countBy..., findBy...)
+ * - Métodos con @Query JPQL explícita</p>
  */
 public interface MatchRepository extends JpaRepository<MatchEntity, Long>,
     JpaSpecificationExecutor<MatchEntity> {
 
   /**
-   * Cuenta los partidos almacenados para una competición concreta.
+   * Cuenta los partidos de una competición concreta.
    * Usado en el arranque para saber si una liga ya tiene datos.
    *
-   * @param competitionCode Código de la competición (ej. "PD", "CL").
+   * @param competitionCode Código de la competición (ej. "PD").
    * @return Número de partidos en BD para esa competición.
    */
   long countByCompetitionCode(String competitionCode);
 
   /**
-   * Devuelve los códigos de competición que tienen partidos activos
-   * (en juego, programados o a punto de empezar) en el rango de tiempo dado.
+   * Devuelve códigos de competición que necesitan sincronización inmediata.
    *
-   * <p>Lo usamos para el sync de partidos en vivo: en lugar de sincronizar
-   * todas las ligas cada 5 minutos, solo sincronizamos las que tienen
-   * partidos en la ventana horaria actual. Más eficiente y respetuoso
-   * con el límite de 10 llamadas/minuto de la API gratuita.</p>
+   * <p>Incluye dos casos:</p>
+   * <ol>
+   *   <li>Partidos con estado IN_PLAY o PAUSED en BD, independientemente de la fecha.
+   *       Estos son datos <b>obsoletos</b>: el partido terminó pero el backend no
+   *       lo actualizó (apagado, error de red, etc.). Hay que sincronizarlos
+   *       sin importar cuándo fue el partido.</li>
+   *   <li>Partidos TIMED o SCHEDULED cuya fecha está dentro de la ventana
+   *       {@code [start, end]} (normalmente las próximas 2 horas). Se sincronizan
+   *       para actualizar el status antes del inicio.</li>
+   * </ol>
    *
-   * @param start  Inicio de la ventana temporal (normalmente, ahora - 3h).
-   * @param end    Fin de la ventana temporal (normalmente, ahora + 4h).
-   * @return Lista de códigos únicos de competición con partidos activos.
+   * <p>Esta query es mucho más robusta que filtrar solo por fecha, porque
+   * captura partidos de días anteriores que quedaron con estado incorrecto.</p>
+   *
+   * @param start Inicio de la ventana para partidos futuros (ahora).
+   * @param end   Fin de la ventana para partidos futuros (ahora + 2h).
+   * @return Lista de códigos únicos de competición que necesitan sync.
    */
   @Query("""
         SELECT DISTINCT m.competitionCode
         FROM MatchEntity m
-        WHERE m.status IN ('TIMED', 'IN_PLAY', 'SCHEDULED', 'PAUSED')
-          AND m.utcDate BETWEEN :start AND :end
+        WHERE m.status IN ('IN_PLAY', 'PAUSED')
+           OR (m.status IN ('TIMED', 'SCHEDULED') AND m.utcDate BETWEEN :start AND :end)
         """)
-  List<String> findActiveCompetitionCodesForPeriod(
+  List<String> findCompetitionsNeedingSync(
       @Param("start") OffsetDateTime start,
-      @Param("end") OffsetDateTime end
+      @Param("end")   OffsetDateTime end
   );
+
+  /**
+   * Devuelve los códigos de competición que tienen partidos con estado
+   * IN_PLAY o PAUSED en la BD (datos obsoletos que no se actualizaron).
+   *
+   * <p>Se usa en el arranque del servidor para detectar y corregir
+   * resultados que quedaron sin actualizar de sesiones anteriores.</p>
+   *
+   * @return Lista de códigos de competición con partidos atascados en IN_PLAY/PAUSED.
+   */
+  @Query("""
+        SELECT DISTINCT m.competitionCode
+        FROM MatchEntity m
+        WHERE m.status IN ('IN_PLAY', 'PAUSED')
+        """)
+  List<String> findCompetitionsWithStaleLiveMatches();
 }
