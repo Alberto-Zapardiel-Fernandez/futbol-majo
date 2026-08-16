@@ -18,17 +18,14 @@ public interface MatchRepository extends JpaRepository<MatchEntity, Long>,
   long countByCompetitionCode(String competitionCode);
 
   /**
-   * Competiciones que necesitan sync ahora mismo.
-   * Captura tres casos:
-   * 1. Partidos ya marcados IN_PLAY o PAUSED en BD (actualizar marcador).
-   * 2. Partidos TIMED/SCHEDULED cuya hora ya pasó pero aún no se han actualizado
-   *    (el partido de las 19:00 a las 19:15 — este era el bug).
-   * 3. Partidos TIMED/SCHEDULED a punto de empezar (próximas 2h).
+   * Competiciones que necesitan sync ahora.
+   * Incluye LIVE además de IN_PLAY y PAUSED — football-data.org
+   * devuelve "LIVE" en el tier gratuito en lugar de "IN_PLAY".
    */
   @Query("""
         SELECT DISTINCT m.competitionCode
         FROM MatchEntity m
-        WHERE m.status IN ('IN_PLAY', 'PAUSED')
+        WHERE m.status IN ('IN_PLAY', 'PAUSED', 'LIVE')
            OR (m.status IN ('TIMED', 'SCHEDULED') AND m.utcDate BETWEEN :windowStart AND :windowEnd)
         """)
   List<String> findCompetitionsNeedingSync(
@@ -36,10 +33,14 @@ public interface MatchRepository extends JpaRepository<MatchEntity, Long>,
       @Param("windowEnd")   OffsetDateTime windowEnd
   );
 
+  /**
+   * Partidos atascados en estado live sin actualizar.
+   * Incluye LIVE además de IN_PLAY y PAUSED.
+   */
   @Query("""
         SELECT DISTINCT m.competitionCode
         FROM MatchEntity m
-        WHERE m.status IN ('IN_PLAY', 'PAUSED')
+        WHERE m.status IN ('IN_PLAY', 'PAUSED', 'LIVE')
         """)
   List<String> findCompetitionsWithStaleLiveMatches();
 }
