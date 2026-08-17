@@ -6,6 +6,7 @@ import com.futbol.majo.dto.MatchesResponseDTO;
 import com.futbol.majo.dto.ScoreDTO;
 import com.futbol.majo.dto.StandingsResponseDTO;
 import com.futbol.majo.dto.TeamDTO;
+import com.futbol.majo.dto.TeamDetailDTO;
 import com.futbol.majo.entity.MatchEntity;
 import com.futbol.majo.mapper.MatchMapper;
 import com.futbol.majo.repository.MatchRepository;
@@ -289,6 +290,26 @@ public class FootballDataService {
         .uri("/matches/" + matchId)
         .retrieve()
         .body(MatchDetailDTO.class);
+  }
+
+  /**
+   * Obtiene el detalle completo de un equipo desde la API externa.
+   *
+   * <p>Incluye nombre del estadio, año de fundación, colores del club
+   * y la plantilla completa con posición, dorsal y nacionalidad.</p>
+   *
+   * <p>El resultado se cachea durante 60 minutos: la plantilla raramente
+   * cambia y cada llamada a la API cuenta contra el límite gratuito.</p>
+   *
+   * @param teamId ID del equipo en football-data.org.
+   * @return {@link TeamDetailDTO} con toda la información disponible.
+   */
+  @Cacheable(value = "teams", key = "#teamId")
+  public TeamDetailDTO getTeamDetail(Long teamId) {
+    return footballRestClient.get()
+        .uri("/teams/" + teamId)
+        .retrieve()
+        .body(TeamDetailDTO.class);
   }
 
 }

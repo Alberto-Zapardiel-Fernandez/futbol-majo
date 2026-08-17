@@ -5,6 +5,7 @@ import com.futbol.majo.dto.League;
 import com.futbol.majo.dto.MatchDTO;
 import com.futbol.majo.dto.MatchDetailDTO;
 import com.futbol.majo.dto.StandingsResponseDTO;
+import com.futbol.majo.dto.TeamDetailDTO;
 import com.futbol.majo.service.FootballDataService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -234,6 +235,24 @@ public class FootballController {
       @org.springframework.web.bind.annotation.PathVariable Long matchId) {
 
     return ResponseEntity.ok(footballDataService.getMatchDetail(matchId));
+  }
+
+  /**
+   * Devuelve el detalle completo de un equipo: plantilla, estadio y colores.
+   *
+   * @param teamId ID del equipo.
+   * @return {@link TeamDetailDTO} con plantilla y datos del club.
+   */
+  @GetMapping("/team/{teamId}")
+  @Operation(
+      summary     = "Detalle de equipo",
+      description = "Devuelve la plantilla completa, estadio, año de fundación " +
+          "y colores del club. Cacheado 60 minutos."
+  )
+  public ResponseEntity<TeamDetailDTO> getTeamDetail(
+      @org.springframework.web.bind.annotation.PathVariable Long teamId) {
+
+    return ResponseEntity.ok(footballDataService.getTeamDetail(teamId));
   }
 
 }
