@@ -216,37 +216,57 @@ public class FootballDataService {
   }
 
   /**
-   * Devuelve todos los partidos en curso o próximos en las siguientes 6 horas,
-   * de cualquier liga, ordenados por fecha.
+   * Devuelve partidos en curso y próximos de todas las ligas.
    *
-   * <p>Usado por el endpoint {@code GET /live} para alimentar la sección
-   * "En Vivo y Próximos" del frontend.</p>
-   *
-   * <p>Incluye dos grupos:</p>
-   * <ul>
-   *   <li>Status {@code IN_PLAY}, {@code LIVE} o {@code PAUSED} → en curso ahora.</li>
-   *   <li>Status {@code TIMED} o {@code SCHEDULED} con fecha en las próximas 6h → próximos.</li>
-   * </ul>
+   * <p>Estrategia en dos pasos para que la sección nunca quede vacía:</p>
+   * <ol>
+   *   <li>Busca partidos live (IN_PLAY, LIVE, PAUSED) + próximas 12 horas.</li>
+   *   <li>Si no hay ninguno, devuelve los 10 siguientes partidos programados
+   *       sin límite de tiempo — útil en días sin partidos cercanos.</li>
+   * </ol>
    *
    * @return Lista de {@link MatchDTO} ordenada por {@code utcDate} ascendente.
    */
   @Transactional(readOnly = true)
   public List<MatchDTO> getLiveAndUpcomingMatches() {
-    OffsetDateTime now  = OffsetDateTime.now();
-    OffsetDateTime in6h = now.plusHours(6);
+    OffsetDateTime now   = OffsetDateTime.now();
+    OffsetDateTime in12h = now.plusHours(12);
 
-    Specification<MatchEntity> live = (root, query, cb) ->
+    // Paso 1 — partidos live o en las próximas 12 horas
+    Specification<MatchEntity> live = (root, q, cb) ->
         root.get("status").in("IN_PLAY", "LIVE", "PAUSED");
 
-    Specification<MatchEntity> upcoming = (root, query, cb) -> cb.and(
+    Specification<MatchEntity> soon = (root, q, cb) -> cb.and(
         root.get("status").in("TIMED", "SCHEDULED"),
-        cb.between(root.get("utcDate"), now, in6h)
+        cb.between(root.get("utcDate"), now, in12h)
     );
 
-    Specification<MatchEntity> spec = Specification.where(live).or(upcoming);
+    List<MatchDTO> results = matchRepository
+        .findAll(
+            Specification.where(live).or(soon),
+            org.springframework.data.domain.Sort.by("utcDate").ascending()
+        )
+        .stream()
+        .map(matchMapper::toMatchDto)
+        .toList();
+
+    if (!results.isEmpty()) return results;
+
+    // Paso 2 — fallback: próximos 10 partidos sin límite de tiempo
+    Specification<MatchEntity> nextMatches = (root, q, cb) -> cb.and(
+        root.get("status").in("TIMED", "SCHEDULED"),
+        cb.greaterThan(root.get("utcDate"), now)
+    );
 
     return matchRepository
-        .findAll(spec, org.springframework.data.domain.Sort.by("utcDate").ascending())
+        .findAll(
+            nextMatches,
+            org.springframework.data.domain.PageRequest.of(
+                0, 10,
+                org.springframework.data.domain.Sort.by("utcDate").ascending()
+            )
+        )
+        .getContent()
         .stream()
         .map(matchMapper::toMatchDto)
         .toList();
