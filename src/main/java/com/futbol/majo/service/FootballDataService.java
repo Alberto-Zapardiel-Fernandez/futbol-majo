@@ -1,6 +1,7 @@
 package com.futbol.majo.service;
 
 import com.futbol.majo.dto.MatchDTO;
+import com.futbol.majo.dto.MatchDetailDTO;
 import com.futbol.majo.dto.MatchesResponseDTO;
 import com.futbol.majo.dto.ScoreDTO;
 import com.futbol.majo.dto.StandingsResponseDTO;
@@ -270,6 +271,24 @@ public class FootballDataService {
         .stream()
         .map(matchMapper::toMatchDto)
         .toList();
+  }
+
+  /**
+   * Obtiene el detalle completo de un partido desde la API externa.
+   *
+   * <p>Incluye score actualizado y alineaciones cuando están disponibles.
+   * Las alineaciones solo aparecen a partir del inicio del partido.</p>
+   *
+   * <p>No se cachea porque los datos cambian durante el partido.</p>
+   *
+   * @param matchId ID del partido en football-data.org.
+   * @return {@link MatchDetailDTO} con toda la información del partido.
+   */
+  public MatchDetailDTO getMatchDetail(Long matchId) {
+    return footballRestClient.get()
+        .uri("/matches/" + matchId)
+        .retrieve()
+        .body(MatchDetailDTO.class);
   }
 
 }

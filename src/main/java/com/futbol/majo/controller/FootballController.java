@@ -3,6 +3,7 @@ package com.futbol.majo.controller;
 import com.futbol.majo.dto.LeagueDTO;
 import com.futbol.majo.dto.League;
 import com.futbol.majo.dto.MatchDTO;
+import com.futbol.majo.dto.MatchDetailDTO;
 import com.futbol.majo.dto.StandingsResponseDTO;
 import com.futbol.majo.service.FootballDataService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -216,6 +217,23 @@ public class FootballController {
   )
   public ResponseEntity<List<MatchDTO>> getLiveAndUpcoming() {
     return ResponseEntity.ok(footballDataService.getLiveAndUpcomingMatches());
+  }
+
+  /**
+   * Devuelve el detalle completo de un partido: score y alineaciones.
+   *
+   * @param matchId ID del partido.
+   * @return {@link MatchDetailDTO} con toda la información disponible.
+   */
+  @GetMapping("/match/{matchId}")
+  @Operation(
+      summary     = "Detalle de partido",
+      description = "Devuelve score actualizado y alineaciones (disponibles solo cuando el partido empieza)."
+  )
+  public ResponseEntity<MatchDetailDTO> getMatchDetail(
+      @org.springframework.web.bind.annotation.PathVariable Long matchId) {
+
+    return ResponseEntity.ok(footballDataService.getMatchDetail(matchId));
   }
 
 }
