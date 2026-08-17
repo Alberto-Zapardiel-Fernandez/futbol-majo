@@ -204,4 +204,18 @@ public class FootballController {
     return ResponseEntity.ok("Sync completado para " + league.toUpperCase());
   }
 
+  /**
+   * Devuelve partidos en curso y próximos (próximas 6h) de todas las ligas.
+   * Usado por la sección "En Vivo y Próximos" del frontend.
+   */
+  @GetMapping("/live")
+  @Operation(
+      summary     = "En vivo y próximos",
+      description = "Devuelve partidos en curso (IN_PLAY, LIVE, PAUSED) y programados " +
+          "en las próximas 6 horas, de cualquier liga, ordenados por fecha."
+  )
+  public ResponseEntity<List<MatchDTO>> getLiveAndUpcoming() {
+    return ResponseEntity.ok(footballDataService.getLiveAndUpcomingMatches());
+  }
+
 }

@@ -214,4 +214,42 @@ public class FootballDataService {
         .retrieve()
         .body(StandingsResponseDTO.class);
   }
+
+  /**
+   * Devuelve todos los partidos en curso o próximos en las siguientes 6 horas,
+   * de cualquier liga, ordenados por fecha.
+   *
+   * <p>Usado por el endpoint {@code GET /live} para alimentar la sección
+   * "En Vivo y Próximos" del frontend.</p>
+   *
+   * <p>Incluye dos grupos:</p>
+   * <ul>
+   *   <li>Status {@code IN_PLAY}, {@code LIVE} o {@code PAUSED} → en curso ahora.</li>
+   *   <li>Status {@code TIMED} o {@code SCHEDULED} con fecha en las próximas 6h → próximos.</li>
+   * </ul>
+   *
+   * @return Lista de {@link MatchDTO} ordenada por {@code utcDate} ascendente.
+   */
+  @Transactional(readOnly = true)
+  public List<MatchDTO> getLiveAndUpcomingMatches() {
+    OffsetDateTime now  = OffsetDateTime.now();
+    OffsetDateTime in6h = now.plusHours(6);
+
+    Specification<MatchEntity> live = (root, query, cb) ->
+        root.get("status").in("IN_PLAY", "LIVE", "PAUSED");
+
+    Specification<MatchEntity> upcoming = (root, query, cb) -> cb.and(
+        root.get("status").in("TIMED", "SCHEDULED"),
+        cb.between(root.get("utcDate"), now, in6h)
+    );
+
+    Specification<MatchEntity> spec = Specification.where(live).or(upcoming);
+
+    return matchRepository
+        .findAll(spec, org.springframework.data.domain.Sort.by("utcDate").ascending())
+        .stream()
+        .map(matchMapper::toMatchDto)
+        .toList();
+  }
+
 }

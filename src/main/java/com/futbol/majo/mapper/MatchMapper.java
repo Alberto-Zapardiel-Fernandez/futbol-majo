@@ -9,15 +9,12 @@ import org.springframework.stereotype.Component;
 
 /**
  * Conversor entre entidades JPA y DTOs de dominio.
- *
- * <p>Separa la capa de persistencia de la capa de presentación:
- * el controller nunca ve entidades JPA, solo DTOs.</p>
  */
 @Component
 public class MatchMapper {
 
   /**
-   * Convierte un {@link TeamDTO} en entidad {@link TeamEntity}.
+   * Convierte {@link TeamDTO} → {@link TeamEntity}.
    */
   public TeamEntity toTeamEntity(TeamDTO dto) {
     if (dto == null) return null;
@@ -30,24 +27,27 @@ public class MatchMapper {
   }
 
   /**
-   * Convierte una entidad {@link TeamEntity} en su DTO {@link TeamDTO}.
+   * Convierte {@link TeamEntity} → {@link TeamDTO}.
    */
   public TeamDTO toTeamDto(TeamEntity entity) {
     if (entity == null) return null;
-    return new TeamDTO(entity.getId(), entity.getName(),
-        entity.getShortName(), entity.getCrest());
+    return new TeamDTO(
+        entity.getId(),
+        entity.getName(),
+        entity.getShortName(),
+        entity.getCrest()
+    );
   }
 
   /**
-   * Convierte un {@link MatchDTO} en entidad {@link MatchEntity}.
+   * Convierte {@link MatchDTO} → {@link MatchEntity}.
    */
   public MatchEntity toMatchEntity(MatchDTO dto) {
     if (dto == null) return null;
-
     ScoreDTO.FullTimeDTO ft = dto.score() != null ? dto.score().fullTime() : null;
-
     return MatchEntity.builder()
         .id(dto.id())
+        .competitionCode(dto.competitionCode())
         .status(dto.status())
         .utcDate(dto.utcDate())
         .matchDay(dto.matchDay())
@@ -59,15 +59,14 @@ public class MatchMapper {
   }
 
   /**
-   * Convierte una entidad {@link MatchEntity} en su DTO {@link MatchDTO}.
+   * Convierte {@link MatchEntity} → {@link MatchDTO}.
    *
-   * <p>Reconstruye el objeto {@link ScoreDTO} desde las columnas planas
-   * {@code homeScore} y {@code awayScore} de la entidad.</p>
+   * <p>Incluye {@code competitionCode} desde la entidad para que el frontend
+   * pueda agrupar partidos por liga.</p>
    */
   public MatchDTO toMatchDto(MatchEntity entity) {
     if (entity == null) return null;
 
-    // Reconstruimos el ScoreDTO solo si hay datos de goles
     ScoreDTO score = null;
     if (entity.getHomeScore() != null || entity.getAwayScore() != null) {
       score = new ScoreDTO(
@@ -78,6 +77,7 @@ public class MatchMapper {
 
     return new MatchDTO(
         entity.getId(),
+        entity.getCompetitionCode(),   // ← nuevo campo
         entity.getStatus(),
         entity.getUtcDate(),
         entity.getMatchDay(),
